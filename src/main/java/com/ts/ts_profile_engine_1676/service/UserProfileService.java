@@ -43,7 +43,7 @@ public class UserProfileService {
         projectRepository.findById(request.getProjectId()).orElseThrow(() -> new RuntimeException("Invalid projectId"));
         teamRepository.findById(request.getTeamId()).orElseThrow(() -> new RuntimeException("Invalid teamId"));
         billingRepository.findById(request.getBillingId()).orElseThrow(() -> new RuntimeException("Invalid billingId"));
-        managerRepository.findByEmail(request.getManagerEmailId()).orElseThrow(() -> new RuntimeException("Invalid manager email"));
+//        managerRepository.findByEmail(request.getManagerEmailId()).orElseThrow(() -> new RuntimeException("Invalid manager email"));
 
         // Generate next profile ID
         String lastProfileId = userProfileRepository.findTopByOrderByProfileIdDesc()
@@ -88,7 +88,7 @@ public class UserProfileService {
                 request.getEmailId(), rawPassword);
 
         log.info("loginUrl Created for user", loginUrl);
-        notificationService.sendWelcomeNotification(request.getEmailId(), rawPassword, loginUrl);
+        notificationService.sendWelcomeNotification(request.getEmailId(), loginUrl);
 
         // Prepare and return response
         return UserProfileResponse.builder()
