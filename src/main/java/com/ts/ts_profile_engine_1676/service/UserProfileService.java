@@ -1,17 +1,22 @@
 package com.ts.ts_profile_engine_1676.service;
 
+import com.ts.ts_profile_engine_1676.dto.RegisterRequestDto;
 import com.ts.ts_profile_engine_1676.dto.UserProfileRequest;
 import com.ts.ts_profile_engine_1676.dto.UserProfileResponse;
-import com.ts.ts_profile_engine_1676.entity.User;
 import com.ts.ts_profile_engine_1676.entity.UserProfile;
 import com.ts.ts_profile_engine_1676.repository.*;
 import com.ts.ts_profile_engine_1676.util.ProfileIdGenerator;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -21,14 +26,11 @@ import java.util.UUID;
 public class UserProfileService {
 
     private final UserProfileRepository userProfileRepository;
-    private final UserRepository userRepository;
     private final GroupRepository groupRepository;
     private final ProjectRepository projectRepository;
     private final TeamRepository teamRepository;
     private final BillingRepository billingRepository;
-    private final UserRepository managerRepository;
     private final NotificationService notificationService;
-    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public UserProfileResponse generateUserProfile(UserProfileRequest request) {
@@ -68,20 +70,41 @@ public class UserProfileService {
         userProfileRepository.save(userProfile);
 
         // Generate password
-        String rawPassword = UUID.randomUUID().toString().substring(0, 8);
-        String encodedPassword = passwordEncoder.encode(rawPassword);
+        String rawPassword = generateSecurePassword(10);
 
-        // Insert into user table
-        User user = User.builder()
-                .id(UUID.randomUUID().toString().substring(0, 8))
+        // Call Register Url
+        RestTemplate restTemplate = new RestTemplate();
+
+        RegisterRequestDto registerPayload = RegisterRequestDto.builder()
                 .email(request.getEmailId())
-                .password(encodedPassword)
-                .roleId("0005")
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .password(rawPassword)
+                .roleName("user")
                 .build();
 
-        userRepository.save(user);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<RegisterRequestDto> entity = new HttpEntity<>(registerPayload, headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    "http://localhost:1625/v2/api/auth/register",
+                    entity,
+                    String.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("User registered successfully.");
+            } else {
+                log.error("Failed to register user: " + response.getBody());
+                throw new RuntimeException("Auth service returned non-success status");
+            }
+        } catch (Exception e) {
+            log.error("Error while calling auth service", e);
+            throw new RuntimeException("Failed to register user via auth service", e);
+        }
+
+
+        log.debug("User Table Entry Ends");
 
         // Notify via email
         String loginUrl = String.format("http://localhost:1780/auth/login?username=%s&password=%s",
@@ -98,5 +121,17 @@ public class UserProfileService {
                 .loginUrl(loginUrl)
                 .message("User created and notified successfully.")
                 .build();
+    }
+
+    public String generateSecurePassword(int length) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%!&*";
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder();
+
+        for (int i = 0; i < length; i++) {
+            int index = random.nextInt(chars.length());
+            password.append(chars.charAt(index));
+        }
+        return password.toString();
     }
 }
