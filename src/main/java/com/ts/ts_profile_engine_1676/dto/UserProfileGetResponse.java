@@ -1,5 +1,6 @@
 package com.ts.ts_profile_engine_1676.dto;
 
+import com.ts.ts_profile_engine_1676.entity.UserProfile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,14 +12,11 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserProfileResponse {
-    private String profileId;
-    private String emailId;
-    private String name;
-    private String loginUrl;
+public class UserProfileGetResponse {
     private String message;
     private String status;
     private LocalDateTime timestamp;
     private String errorCode;
     private String requestId;
+    private UserProfile data;
 }

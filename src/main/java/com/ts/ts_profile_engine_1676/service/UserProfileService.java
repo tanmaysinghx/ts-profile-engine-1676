@@ -1,6 +1,7 @@
 package com.ts.ts_profile_engine_1676.service;
 
 import com.ts.ts_profile_engine_1676.dto.RegisterRequestDto;
+import com.ts.ts_profile_engine_1676.dto.UserProfileGetResponse;
 import com.ts.ts_profile_engine_1676.dto.UserProfileRequest;
 import com.ts.ts_profile_engine_1676.dto.UserProfileResponse;
 import com.ts.ts_profile_engine_1676.entity.UserProfile;
@@ -18,10 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -38,25 +36,21 @@ public class UserProfileService {
     @Transactional
     public UserProfileResponse generateUserProfile(UserProfileRequest request) {
 
-        // Email uniqueness check
         userProfileRepository.findByEmailId(request.getEmailId()).ifPresent(u -> {
             throw new RuntimeException("Email already exists in user_profile");
         });
 
-        // Validate all foreign keys
         groupRepository.findById(request.getGroupId()).orElseThrow(() -> new RuntimeException("Invalid groupId"));
         projectRepository.findById(request.getProjectId()).orElseThrow(() -> new RuntimeException("Invalid projectId"));
         teamRepository.findById(request.getTeamId()).orElseThrow(() -> new RuntimeException("Invalid teamId"));
         billingRepository.findById(request.getBillingId()).orElseThrow(() -> new RuntimeException("Invalid billingId"));
 //        managerRepository.findByEmail(request.getManagerEmailId()).orElseThrow(() -> new RuntimeException("Invalid manager email"));
 
-        // Generate next profile ID
         String lastProfileId = userProfileRepository.findTopByOrderByProfileIdDesc()
                 .map(UserProfile::getProfileId)
                 .orElse(null);
         String nextProfileId = ProfileIdGenerator.generateNextProfileId(lastProfileId);
 
-        // Insert into user_profile
         UserProfile userProfile = UserProfile.builder()
                 .profileId(nextProfileId)
                 .name(request.getName())
@@ -72,10 +66,8 @@ public class UserProfileService {
 
         userProfileRepository.save(userProfile);
 
-        // Generate password
         String rawPassword = generateSecurePassword(10);
 
-        // Call Register Url
         RestTemplate restTemplate = new RestTemplate();
 
         RegisterRequestDto registerPayload = RegisterRequestDto.builder()
@@ -106,23 +98,24 @@ public class UserProfileService {
             throw new RuntimeException("Failed to register user via auth service", e);
         }
 
-
         log.debug("User Table Entry Ends");
 
-        // Notify via email
         String loginUrl = String.format("http://localhost:1780/auth/login?username=%s&password=%s",
                 request.getEmailId(), rawPassword);
 
         log.info("loginUrl Created for user", loginUrl);
         notificationService.sendWelcomeNotification(request.getEmailId(), loginUrl);
 
-        // Prepare and return response
         return UserProfileResponse.builder()
                 .profileId(nextProfileId)
                 .emailId(request.getEmailId())
                 .name(request.getName())
                 .loginUrl(loginUrl)
                 .message("User created and notified successfully.")
+                .status("success")
+                .timestamp(LocalDateTime.now())
+                .errorCode(null)
+                .requestId("REQ0001")
                 .build();
     }
 
@@ -140,26 +133,44 @@ public class UserProfileService {
         SecureRandom random = new SecureRandom();
         List<Character> passwordChars = new ArrayList<>();
 
-        // Ensure at least one of each required type
         passwordChars.add(upper.charAt(random.nextInt(upper.length())));
         passwordChars.add(lower.charAt(random.nextInt(lower.length())));
         passwordChars.add(digits.charAt(random.nextInt(digits.length())));
         passwordChars.add(special.charAt(random.nextInt(special.length())));
 
-        // Fill the rest of the characters
         for (int i = passwordChars.size(); i < length; i++) {
             passwordChars.add(allChars.charAt(random.nextInt(allChars.length())));
         }
 
-        // Shuffle to avoid predictable placement
         Collections.shuffle(passwordChars, random);
-
-        // Build the final password string
         StringBuilder password = new StringBuilder();
+
         for (char c : passwordChars) {
             password.append(c);
         }
 
         return password.toString();
+    }
+
+    @Transactional
+    public UserProfileGetResponse getUserProfile(String userEmail) {
+        Optional<UserProfile> userProfileOpt = userProfileRepository.findByEmailId(userEmail);
+        if (userProfileOpt.isEmpty()) {
+            return UserProfileGetResponse.builder()
+                    .status("failure")
+                    .message("User not found.")
+                    .errorCode("ERR00001")
+                    .timestamp(LocalDateTime.now())
+                    .requestId("REQ0002")
+                    .build();
+        }
+        UserProfile userProfile = userProfileOpt.get();
+        return UserProfileGetResponse.builder()
+                .message("User found.")
+                .status("success")
+                .timestamp(LocalDateTime.now())
+                .requestId("REQ0002")
+                .data(userProfile)
+                .build();
     }
 }

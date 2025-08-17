@@ -1,5 +1,6 @@
 package com.ts.ts_profile_engine_1676.controller;
 
+import com.ts.ts_profile_engine_1676.dto.UserProfileGetResponse;
 import com.ts.ts_profile_engine_1676.dto.UserProfileRequest;
 import com.ts.ts_profile_engine_1676.dto.UserProfileResponse;
 import com.ts.ts_profile_engine_1676.service.UserProfileService;
@@ -18,6 +19,12 @@ public class UserProfileController {
     @PostMapping("/generate-user")
     public ResponseEntity<UserProfileResponse> generateUser(@RequestBody @Valid UserProfileRequest request) {
         UserProfileResponse response = userProfileService.generateUserProfile(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/get-user-profile/{userEmail}")
+    public ResponseEntity<UserProfileGetResponse> getUser(@PathVariable String userEmail) {
+        UserProfileGetResponse response = userProfileService.getUserProfile(userEmail);
         return ResponseEntity.ok(response);
     }
 }
